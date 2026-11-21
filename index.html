@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f7f5ed">
 <title>여행 다트</title>
+<link rel="canonical" href="https://jhleed.github.io/travel-dart/">
 <style>
   :root {
     color-scheme: light;
@@ -203,7 +204,27 @@
     padding: 20px 0 0;
     border-top: 1px solid var(--line);
   }
-  .attractions h2 { margin: 0 0 10px; font-size: 1.35rem; letter-spacing: -0.04em; }
+  .attractions h2 { margin: 0; font-size: 1.35rem; letter-spacing: -0.04em; }
+  .attraction-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 14px;
+    margin-bottom: 7px;
+  }
+  .share-feedback { margin: 0; color: var(--muted); font-size: .875rem; }
+  .share-feedback:not(:empty) { margin: 0 0 8px; }
+  .share-link {
+    width: min(100%, 500px);
+    min-height: 44px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border: 1px solid #a4b6a8;
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+  }
   .attraction-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -417,7 +438,12 @@
       </div>
     </section>
     <section class="attractions" id="attractions" aria-labelledby="attractions-heading" hidden>
-      <h2 id="attractions-heading">지역 명소</h2>
+      <div class="attraction-header">
+        <h2 id="attractions-heading">지역 명소</h2>
+        <button class="quiet-button" id="share-result" type="button">결과 공유</button>
+      </div>
+      <p class="share-feedback" id="share-feedback" role="status"></p>
+      <input class="share-link" id="share-link" type="url" readonly aria-label="공유 링크" hidden>
       <ul class="attraction-list" id="attraction-list"></ul>
     </section>
   </main>
@@ -820,11 +846,15 @@
   const settingsCount = el('settings-count');
   const attractions = el('attractions');
   const attractionList = el('attraction-list');
+  const shareButton = el('share-result');
+  const shareFeedback = el('share-feedback');
+  const shareLink = el('share-link');
   const blankHeading = heading.innerHTML;
   const normalize = value => value.normalize('NFC').replace(/\s/g, '');
   const regionPaths = new Map();
   let selected = null;
   let throwing = false;
+  let sharing = false;
   let minimumAttractions = loadMinimum();
 
   function isValidMinimum(value) {
@@ -878,11 +908,12 @@
   }
 
   function updateControls() {
-    const availableCount = availableRegions().length;
+    const available = availableRegions();
+    const availableCount = available.length;
     drawButton.disabled = throwing || availableCount === 0;
     openFilters.disabled = throwing;
     skipButton.hidden = !selected || throwing;
-    skipButton.textContent = availableCount === 1 ? '이 지역 빼기' : '이 지역 빼고 다시 던지기';
+    skipButton.textContent = available.some(region => region !== selected) ? '이 지역 빼고 다시 던지기' : '이 지역 빼기';
     drawText.textContent = throwing ? '다트가 날아가는 중' : selected ? '다시 던지기' : '다트 던지기';
     count.textContent = availableCount ? `추첨 가능 ${availableCount}곳` : '추첨할 지역이 없어요.';
     settingsCount.textContent = count.textContent;
@@ -907,6 +938,12 @@
     province.hidden = true;
     attractions.hidden = true;
     attractionList.replaceChildren();
+    resetShareFeedback();
+    const currentUrl = new URL(location.href);
+    if (currentUrl.searchParams.has('region') && /^https?:$/.test(currentUrl.protocol)) {
+      currentUrl.searchParams.delete('region');
+      history.replaceState(history.state, '', currentUrl);
+    }
     hitRegion.setAttribute('hidden', '');
     dart.setAttribute('hidden', '');
     impact.setAttribute('hidden', '');
@@ -921,6 +958,7 @@
     heading.classList.add('is-result');
     hitRegion.setAttribute('d', region.path);
     hitRegion.removeAttribute('hidden');
+    pointDartAt(region.point);
     map.setAttribute('aria-label', `대한민국 여행 다트 지도 · ${region.area === region.name ? region.name : region.area + ' ' + region.name}`);
 
     const fragment = document.createDocumentFragment();
@@ -944,6 +982,57 @@
     attractions.hidden = false;
   }
 
+  function pointDartAt([x, y]) {
+    const angle = Math.atan2(610 - y, 620 - x) * 180 / Math.PI;
+    const transform = `translate(${x}px, ${y}px) rotate(${angle}deg)`;
+    dart.style.transform = transform;
+    dart.removeAttribute('hidden');
+    return { angle, transform };
+  }
+
+  function resetShareFeedback() {
+    shareFeedback.textContent = '';
+    shareLink.hidden = true;
+  }
+
+  async function shareResult() {
+    const result = selected;
+    if (!result || sharing) return;
+
+    const link = new URL(document.querySelector('link[rel="canonical"]').href);
+    link.searchParams.set('region', result.id);
+    const name = result.area === result.name ? result.name : `${result.area} ${result.name}`;
+
+    sharing = true;
+    resetShareFeedback();
+    try {
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: '여행 다트', text: `이번 여행은 ${name}!`, url: link.href });
+          return;
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+        }
+      }
+
+      if (selected !== result) return;
+      try {
+        await navigator.clipboard.writeText(link.href);
+        if (selected === result) shareFeedback.textContent = '결과 링크를 복사했어요.';
+      } catch {
+        if (selected === result) {
+          shareFeedback.textContent = '이 링크를 복사해 공유할 수 있어요.';
+          shareLink.value = link.href;
+          shareLink.hidden = false;
+          shareLink.focus();
+          shareLink.select();
+        }
+      }
+    } finally {
+      sharing = false;
+    }
+  }
+
   async function throwDart() {
     if (throwing) return;
     const candidates = availableRegions();
@@ -956,10 +1045,7 @@
     throwing = true;
     updateControls();
 
-    const endAngle = Math.atan2(610 - y, 620 - x) * 180 / Math.PI;
-    const landing = `translate(${x}px, ${y}px) rotate(${endAngle}deg)`;
-    dart.style.transform = landing;
-    dart.removeAttribute('hidden');
+    const { angle: endAngle, transform: landing } = pointDartAt(target.point);
 
     if (!reducedMotion.matches) {
       const flight = dart.animate([
@@ -1024,6 +1110,7 @@
   }
 
   drawButton.addEventListener('click', throwDart);
+  shareButton.addEventListener('click', shareResult);
   skipButton.addEventListener('click', () => {
     if (!selected || throwing) return;
     excluded.add(selected.id);
@@ -1098,6 +1185,8 @@
     renderList();
     search.focus();
   });
+  const sharedRegion = byId.get(new URLSearchParams(location.search).get('region'));
+  if (sharedRegion && attractionCount(sharedRegion.id)) showResult(sharedRegion);
   updateControls();
 </script>
 </body>
