@@ -409,6 +409,7 @@
     .draw:active:not(:disabled) { transform: none; }
   }
 </style>
+<script id="analytics-config" type="application/json">{}</script>
 </head>
 <body>
 <div class="page">
@@ -877,6 +878,53 @@
   let throwing = false;
   let sharing = false;
   let minimumAttractions = loadMinimum();
+  const captureAnalytics = makeAnalyticsCapture();
+
+  function makeAnalyticsCapture() {
+    const { token, region } = JSON.parse(el('analytics-config').textContent);
+    const pageUrl = new URL(document.querySelector('link[rel="canonical"]').href);
+    if (location.origin !== pageUrl.origin || typeof token !== 'string' ||
+        !/^phc_[A-Za-z0-9_]+$/.test(token) || !['US', 'EU'].includes(region) ||
+        !globalThis.crypto?.randomUUID || navigator.globalPrivacyControl === true) return () => {};
+
+    const idKey = 'korea-travel-dart.analytics-session.v1';
+    let id = crypto.randomUUID();
+    try {
+      id = sessionStorage.getItem(idKey) || id;
+      sessionStorage.setItem(idKey, id);
+    } catch {
+      // Keep the current page's identifier when browser storage is unavailable.
+    }
+
+    const endpoint = `https://${region.toLowerCase()}.i.posthog.com/i/v0/e/`;
+    const referrer = document.referrer ? new URL(document.referrer).hostname : undefined;
+    return (event, properties = {}) => {
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: token,
+          event,
+          distinct_id: id,
+          timestamp: new Date().toISOString(),
+          properties: {
+            $current_url: pageUrl.href,
+            $pathname: pageUrl.pathname,
+            $referring_domain: referrer,
+            $geoip_disable: true,
+            $process_person_profile: false,
+            layout: window.matchMedia('(max-width: 760px)').matches ? 'narrow' : 'wide',
+            ...properties,
+          },
+        }),
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        keepalive: true,
+      }).catch(() => {
+        // Analytics must never interrupt the travel app.
+      });
+    };
+  }
 
   function isValidMinimum(value) {
     return Number.isSafeInteger(value) && value >= 1;
@@ -1008,6 +1056,10 @@
       link.href = detailUrl ?? `https://spot100x100.kr/map/#p=${sourceIndex}`;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
+      link.addEventListener('click', () => captureAnalytics('travel_dart_attraction_clicked', {
+        region_id: region.id,
+        attraction_name: name,
+      }));
       const title = document.createElement('span');
       title.className = 'attraction-name';
       title.textContent = name;
@@ -1044,6 +1096,7 @@
     const name = result.area === result.name ? result.name : `${result.area} ${result.name}`;
 
     sharing = true;
+    captureAnalytics('travel_dart_share_requested', { region_id: result.id });
     resetShareFeedback();
     try {
       if (typeof navigator.share === 'function') {
@@ -1108,6 +1161,10 @@
     }
 
     showResult(target);
+    captureAnalytics('travel_dart_draw_completed', {
+      region_id: target.id,
+      draw_method: skippedId === null ? 'draw' : 'skip',
+    });
     throwing = false;
     updateControls();
     if (drawWasFocused && document.activeElement === document.body) drawButton.focus({ preventScroll: true });
@@ -1184,7 +1241,11 @@
     el('filter-heading').focus();
   });
   const sharedRegion = byId.get(new URLSearchParams(location.search).get('region'));
-  if (sharedRegion && attractionCount(sharedRegion.id)) showResult(sharedRegion);
+  captureAnalytics('$pageview');
+  if (sharedRegion && attractionCount(sharedRegion.id)) {
+    showResult(sharedRegion);
+    captureAnalytics('travel_dart_shared_result_opened', { region_id: sharedRegion.id });
+  }
   updateControls();
 </script>
 </body>
