@@ -159,7 +159,8 @@
     background: transparent;
     font-weight: 700;
   }
-  .skip:hover { background: #edf0e7; }
+  .skip:hover:not(:disabled) { background: #edf0e7; }
+  .skip:disabled { opacity: .58; }
   .filters {
     display: flex;
     flex-wrap: wrap;
@@ -285,7 +286,7 @@
   dialog::backdrop { background: #152a2370; }
   .dialog-body {
     display: grid;
-    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     max-height: min(678px, calc(100dvh - 26px));
   }
   .dialog-header {
@@ -307,40 +308,70 @@
     color: var(--ink);
   }
   .close:hover { background: #edf0e7; }
-  .search {
-    width: calc(100% - 40px);
-    margin: 0 20px;
-    padding: 12px;
-    border: 1px solid #a4b6a8;
+  .dialog-content { min-height: 0; overflow-y: auto; padding: 4px 20px 3px; }
+  .dialog-content .minimum-setting { margin: 0 0 13px; }
+  .area-options-heading { margin: 0 0 5px; color: var(--muted); font-size: .875rem; }
+  .area-picker {
+    margin: 0 0 8px;
+    border: 1px solid var(--line);
     border-radius: 8px;
     background: #fffefa;
-    color: var(--ink);
-    font-size: 1rem;
   }
-  .dialog-tools {
+  .area-picker summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 8px;
+    align-items: center;
+    gap: 9px;
+    min-height: 51px;
+    padding: 9px 12px;
+    list-style: none;
+    cursor: pointer;
+    font-weight: 750;
+  }
+  .area-picker summary::-webkit-details-marker { display: none; }
+  .area-picker summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg) translateY(-2px);
+  }
+  .area-picker[open] summary::after { transform: rotate(225deg) translateY(-2px); }
+  .area-summary {
+    color: var(--muted);
+    font-size: .875rem;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  .area-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(57px, 1fr));
+    gap: 6px;
+    padding: 0 10px 10px;
+  }
+  .area-option { min-height: 44px; padding: 5px; }
+  .area-option[aria-pressed="true"] {
+    border-color: #205443;
+    background: #205443;
+    color: white;
+  }
+  #excluded-areas .area-option[aria-pressed="true"] {
+    border-color: #9c4432;
+    background: #9c4432;
+    color: white;
+  }
+  .legacy-exclusions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-between;
     align-items: center;
-    gap: 3px 8px;
-    padding: 8px 20px;
+    justify-content: space-between;
+    gap: 6px;
+    color: var(--muted);
     font-size: .875rem;
   }
-  .only-excluded { display: flex; gap: 7px; align-items: center; min-height: 40px; cursor: pointer; }
-  input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: #205443; flex: none; }
-  .regions { overflow: auto; min-height: 0; margin: 0 20px; border-top: 1px solid var(--line); }
-  .region-row {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    min-height: 43px;
-    padding: 7px 9px;
-    border-bottom: 1px solid #e0e4d7;
-    cursor: pointer;
-  }
-  .region-row:focus-within { background: #eff2e9; }
-  .region-area { margin-left: auto; font-size: .875rem; color: var(--muted); }
-  .empty { padding: 6px 9px; color: var(--muted); }
   .done-bar { padding: 11px 20px 16px; }
   .done {
     min-height: 44px;
@@ -352,18 +383,6 @@
     font-weight: 750;
   }
   .done:hover { background: #174737; }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
-
   @media (max-width: 760px) {
     .page { padding: 0 16px; max-width: 560px; }
     .masthead { padding: 14px 0 13px; }
@@ -384,12 +403,6 @@
     .attractions { margin-top: 8px; padding-top: 15px; }
     .attraction-list { grid-template-columns: 1fr; }
     footer { padding-top: 10px; }
-  }
-
-  @media (max-height: 520px) {
-    dialog { overflow-y: auto; }
-    .dialog-body { max-height: none; }
-    .regions { min-height: 88px; max-height: 180px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -430,11 +443,11 @@
       <p class="description" id="description">자연·생태 명소가 있는 지역을 뽑아요.</p>
       <div class="draw-area">
         <button class="draw" id="draw" type="button"><span class="target-icon" aria-hidden="true"></span><span id="draw-text">다트 던지기</span></button>
-        <button class="skip" id="skip" type="button" hidden>이 지역 빼고 다시 던지기</button>
+        <button class="skip" id="skip" type="button" hidden>이 시·군 건너뛰기</button>
       </div>
       <div class="filters">
         <p class="count" id="count" aria-live="polite"></p>
-        <button class="filter-button" id="open-filters" type="button"><span class="filter-icon" aria-hidden="true"></span> <span id="filter-text">추첨 설정</span></button>
+        <button class="filter-button" id="open-filters" type="button"><span class="filter-icon" aria-hidden="true"></span> <span>추첨 설정</span></button>
       </div>
     </section>
     <section class="attractions" id="attractions" aria-labelledby="attractions-heading" hidden>
@@ -458,25 +471,33 @@
       <h2 id="filter-heading" tabindex="-1">추첨 설정</h2>
       <button class="close" type="button" aria-label="닫기">×</button>
     </div>
-    <div class="minimum-setting">
-      <div class="minimum-line">
-        <label for="minimum-attractions">지역별 최소 명소 수</label>
-        <div class="minimum-value">
-          <input id="minimum-attractions" type="number" min="1" step="1" inputmode="numeric" aria-describedby="settings-count minimum-error">
-          <span aria-hidden="true">곳</span>
+    <div class="dialog-content">
+      <div class="minimum-setting">
+        <div class="minimum-line">
+          <label for="minimum-attractions">지역별 최소 명소 수</label>
+          <div class="minimum-value">
+            <input id="minimum-attractions" type="number" min="1" step="1" inputmode="numeric" aria-describedby="settings-count minimum-error">
+            <span aria-hidden="true">곳</span>
+          </div>
         </div>
+        <p class="minimum-note" id="settings-count" aria-live="polite"></p>
+        <p class="minimum-note" id="minimum-error" aria-live="polite" hidden>1 이상의 정수를 입력해 주세요.</p>
       </div>
-      <p class="minimum-note" id="settings-count" aria-live="polite"></p>
-      <p class="minimum-note" id="minimum-error" aria-live="polite" hidden>1 이상의 정수를 입력해 주세요.</p>
+      <p class="area-options-heading">시·도 선택</p>
+      <details class="area-picker" name="province-preferences">
+        <summary><span>가고 싶은 지역</span><span class="area-summary" id="wanted-summary">전국</span></summary>
+        <div class="area-options" id="wanted-areas" data-choice="want"></div>
+      </details>
+      <details class="area-picker" name="province-preferences">
+        <summary><span>빼고 싶은 지역</span><span class="area-summary" id="excluded-summary">없음</span></summary>
+        <div class="area-options" id="excluded-areas" data-choice="exclude"></div>
+      </details>
+      <div class="legacy-exclusions" id="legacy-exclusions" hidden>
+        <span id="legacy-count"></span>
+        <button class="quiet-button" id="clear-legacy" type="button">이전 제외 해제</button>
+      </div>
     </div>
-    <label class="sr-only" for="search">지역 이름 검색</label>
-    <input class="search" id="search" type="search" placeholder="빼고 싶은 지역 검색" autocomplete="off">
-    <div class="dialog-tools">
-      <label class="only-excluded"><input id="only-excluded" type="checkbox"> 제외한 곳만 보기</label>
-      <button class="quiet-button" id="clear-exclusions" type="button">제외 전체 해제</button>
-    </div>
-    <div class="regions" id="region-list"></div>
-    <form class="done-bar" method="dialog"><button class="done" id="done" type="submit">완료</button></form>
+    <form class="done-bar" method="dialog"><button class="done" type="submit">완료</button></form>
   </div>
 </dialog>
 
@@ -806,11 +827,14 @@
 <script>
   const regions = JSON.parse(document.getElementById('region-data').textContent);
   const byId = new Map(regions.map(region => [region.id, region]));
-  const storageKey = 'korea-travel-dart.excluded.v1';
+  const legacyKey = 'korea-travel-dart.excluded.v1';
+  const areaKey = 'korea-travel-dart.province-preferences.v1';
+  const areaNames = [...new Set(regions.map(region => region.area))];
   const minimumKey = 'korea-travel-dart.minimum-attractions.v1';
   const drawDefaults = Object.freeze({ minimumAttractions: 3 });
   const { topics, byRegion } = JSON.parse(document.getElementById('attraction-data').textContent);
-  const excluded = loadExclusions();
+  const legacyExclusions = loadLegacyExclusions();
+  const areaChoices = loadAreaChoices();
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const svgNS = 'http://www.w3.org/2000/svg';
   const colors = ['#c3d3b9', '#d4ddbc', '#c1d6c5', '#cddabc', '#bfd2bb'];
@@ -833,14 +857,12 @@
   const drawText = el('draw-text');
   const skipButton = el('skip');
   const openFilters = el('open-filters');
-  const filterText = el('filter-text');
   const count = el('count');
   const dialog = el('filters-dialog');
-  const search = el('search');
-  const onlyExcluded = el('only-excluded');
-  const regionList = el('region-list');
-  const clearExclusions = el('clear-exclusions');
-  const done = el('done');
+  const dialogContent = dialog.querySelector('.dialog-content');
+  const areaPickers = [...dialog.querySelectorAll('.area-options')];
+  const legacyRow = el('legacy-exclusions');
+  const legacyCount = el('legacy-count');
   const minimumInput = el('minimum-attractions');
   const minimumError = el('minimum-error');
   const settingsCount = el('settings-count');
@@ -850,7 +872,6 @@
   const shareFeedback = el('share-feedback');
   const shareLink = el('share-link');
   const blankHeading = heading.innerHTML;
-  const normalize = value => value.normalize('NFC').replace(/\s/g, '');
   const regionPaths = new Map();
   let selected = null;
   let throwing = false;
@@ -876,7 +897,12 @@
   }
 
   function availableRegions() {
-    return regions.filter(region => !excluded.has(region.id) && attractionCount(region.id) >= minimumAttractions);
+    const hasWanted = [...areaChoices.values()].includes('want');
+    return regions.filter(region => {
+      const choice = areaChoices.get(region.area);
+      return (!hasWanted || choice === 'want') && choice !== 'exclude' &&
+        !legacyExclusions.has(region.id) && attractionCount(region.id) >= minimumAttractions;
+    });
   }
 
   for (const region of regions) {
@@ -887,24 +913,39 @@
     path.setAttribute('fill-rule', 'evenodd');
     mapRegions.append(path);
     regionPaths.set(region.id, path);
-    region.searchNames = [region.area + region.name, region.fullArea + region.name, region.fullArea].map(normalize);
   }
 
-  function loadExclusions() {
+  function loadLegacyExclusions() {
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const saved = JSON.parse(localStorage.getItem(legacyKey) || '[]');
       return new Set(Array.isArray(saved) ? saved.filter(id => byId.has(id)) : []);
     } catch {
       return new Set();
     }
   }
 
-  function saveExclusions() {
+  function loadAreaChoices() {
     try {
-      localStorage.setItem(storageKey, JSON.stringify([...excluded]));
+      const saved = JSON.parse(localStorage.getItem(areaKey) || '{}');
+      return new Map(Object.entries(saved).filter(([area, choice]) =>
+        areaNames.includes(area) && (choice === 'want' || choice === 'exclude')));
     } catch {
-      // Keep the settings for this visit when browser storage is unavailable.
+      return new Map();
     }
+  }
+
+  function updateAreaSettings() {
+    const wanted = areaNames.filter(area => areaChoices.get(area) === 'want');
+    const excluded = areaNames.filter(area => areaChoices.get(area) === 'exclude');
+    el('wanted-summary').textContent = wanted.join(' · ') || '전국';
+    el('excluded-summary').textContent = excluded.join(' · ') || '없음';
+    for (const picker of areaPickers) {
+      for (const button of picker.children) {
+        button.setAttribute('aria-pressed', areaChoices.get(button.value) === picker.dataset.choice);
+      }
+    }
+    legacyRow.hidden = legacyExclusions.size === 0;
+    legacyCount.textContent = `이전 시·군 제외 ${legacyExclusions.size}곳`;
   }
 
   function updateControls() {
@@ -913,19 +954,18 @@
     drawButton.disabled = throwing || availableCount === 0;
     openFilters.disabled = throwing;
     skipButton.hidden = !selected || throwing;
-    skipButton.textContent = available.some(region => region !== selected) ? '이 지역 빼고 다시 던지기' : '이 지역 빼기';
+    skipButton.disabled = throwing || !available.some(region => region !== selected);
     drawText.textContent = throwing ? '다트가 날아가는 중' : selected ? '다시 던지기' : '다트 던지기';
     count.textContent = availableCount ? `추첨 가능 ${availableCount}곳` : '추첨할 지역이 없어요.';
     settingsCount.textContent = count.textContent;
-    filterText.textContent = excluded.size ? `추첨 설정 · ${excluded.size}곳 제외` : '추첨 설정';
-    clearExclusions.disabled = excluded.size === 0;
-    done.textContent = excluded.size ? `완료 · ${excluded.size}곳 제외` : '완료';
+    updateAreaSettings();
+    const availableIds = new Set(available.map(region => region.id));
     for (const [id, path] of regionPaths) {
-      path.classList.toggle('is-unavailable', attractionCount(id) < minimumAttractions);
-      path.classList.toggle('is-excluded', excluded.has(id));
+      path.classList.toggle('is-unavailable', !availableIds.has(id));
+      path.classList.toggle('is-excluded', legacyExclusions.has(id) || areaChoices.get(byId.get(id).area) === 'exclude');
     }
     if (selected) description.textContent = `자연·생태 명소 ${attractionCount(selected.id)}곳`;
-    else if (!availableCount) description.textContent = '추첨 설정에서 최소 명소 수를 낮추거나 제외를 해제해 주세요.';
+    else if (!availableCount) description.textContent = '추첨 설정에서 지역 범위나 최소 명소 수를 조정해 주세요.';
     else description.textContent = '자연·생태 명소가 있는 지역을 뽑아요.';
   }
 
@@ -1033,9 +1073,9 @@
     }
   }
 
-  async function throwDart() {
+  async function throwDart(skippedId = null) {
     if (throwing) return;
-    const candidates = availableRegions();
+    const candidates = availableRegions().filter(region => region.id !== skippedId);
     if (!candidates.length) return;
 
     const target = candidates[Math.floor(Math.random() * candidates.length)];
@@ -1073,64 +1113,45 @@
     if (drawWasFocused && document.activeElement === document.body) drawButton.focus({ preventScroll: true });
   }
 
-  function renderList() {
-    const query = normalize(search.value);
-    const visible = regions.filter(region =>
-      (!onlyExcluded.checked || excluded.has(region.id)) &&
-      (!query || region.searchNames.some(name => name.includes(query)))
-    );
-    if (!visible.length) {
-      const empty = document.createElement('p');
-      empty.className = 'empty';
-      empty.textContent = query ? '검색 결과가 없어요.' : '제외한 곳이 없어요.';
-      regionList.replaceChildren(empty);
-      return;
+  for (const picker of areaPickers) {
+    const choice = picker.dataset.choice;
+    for (const area of areaNames) {
+      const button = document.createElement('button');
+      button.className = 'quiet-button area-option';
+      button.type = 'button';
+      button.value = area;
+      button.textContent = area;
+      button.addEventListener('click', () => {
+        if (areaChoices.get(area) === choice) areaChoices.delete(area);
+        else areaChoices.set(area, choice);
+        try {
+          localStorage.setItem(areaKey, JSON.stringify(Object.fromEntries(areaChoices)));
+        } catch {
+          // Keep the settings for this visit when browser storage is unavailable.
+        }
+        if (selected && !availableRegions().includes(selected)) clearResult();
+        updateControls();
+      });
+      picker.append(button);
     }
-
-    const fragment = document.createDocumentFragment();
-    for (const region of visible) {
-      const row = document.createElement('label');
-      row.className = 'region-row';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = region.id;
-      checkbox.checked = excluded.has(region.id);
-      const name = document.createElement('span');
-      name.textContent = region.name;
-      row.append(checkbox, name);
-      if (region.area !== region.name) {
-        const area = document.createElement('span');
-        area.className = 'region-area';
-        area.textContent = region.area;
-        row.append(area);
-      }
-      fragment.append(row);
-    }
-    regionList.replaceChildren(fragment);
   }
 
-  drawButton.addEventListener('click', throwDart);
+  drawButton.addEventListener('click', () => throwDart());
   shareButton.addEventListener('click', shareResult);
   skipButton.addEventListener('click', () => {
-    if (!selected || throwing) return;
-    excluded.add(selected.id);
-    saveExclusions();
-    clearResult();
-    updateControls();
-    (drawButton.disabled ? openFilters : drawButton).focus({ preventScroll: true });
-    throwDart();
+    if (!selected || skipButton.disabled) return;
+    drawButton.focus({ preventScroll: true });
+    throwDart(selected.id);
   });
 
   openFilters.addEventListener('click', () => {
     minimumInput.value = minimumAttractions;
     minimumError.hidden = true;
     minimumInput.removeAttribute('aria-invalid');
-    search.value = '';
-    onlyExcluded.checked = false;
-    renderList();
+    for (const picker of areaPickers) picker.parentElement.open = false;
     dialog.showModal();
     el('filter-heading').focus();
-    regionList.scrollTop = 0;
+    dialogContent.scrollTop = 0;
   });
   dialog.querySelector('.close').addEventListener('click', () => dialog.close());
   minimumInput.addEventListener('input', () => {
@@ -1152,38 +1173,15 @@
     if (selected && attractionCount(selected.id) < value) clearResult();
     updateControls();
   });
-  search.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !event.isComposing) {
-      event.preventDefault();
-      dialog.close();
+  el('clear-legacy').addEventListener('click', () => {
+    legacyExclusions.clear();
+    try {
+      localStorage.removeItem(legacyKey);
+    } catch {
+      // Keep the settings for this visit when browser storage is unavailable.
     }
-  });
-  search.addEventListener('input', () => {
-    renderList();
-    regionList.scrollTop = 0;
-  });
-  onlyExcluded.addEventListener('change', () => {
-    renderList();
-    regionList.scrollTop = 0;
-  });
-  regionList.addEventListener('change', event => {
-    const checkbox = event.target;
-    if (checkbox.checked) excluded.add(checkbox.value);
-    else excluded.delete(checkbox.value);
-    if (selected && excluded.has(selected.id)) clearResult();
-    saveExclusions();
     updateControls();
-    if (onlyExcluded.checked) {
-      renderList();
-      (regionList.querySelector('input') || onlyExcluded).focus();
-    }
-  });
-  clearExclusions.addEventListener('click', () => {
-    excluded.clear();
-    saveExclusions();
-    updateControls();
-    renderList();
-    search.focus();
+    el('filter-heading').focus();
   });
   const sharedRegion = byId.get(new URLSearchParams(location.search).get('region'));
   if (sharedRegion && attractionCount(sharedRegion.id)) showResult(sharedRegion);
