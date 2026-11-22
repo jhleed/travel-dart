@@ -1,0 +1,57 @@
+name: Deploy travel dart to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
+      - name: Build static page
+        env:
+          POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          token = os.environ["POSTHOG_PROJECT_TOKEN"].strip()
+          config = {}
+          if token:
+              if not re.fullmatch(r"phc_[a-zA-Z0-9_-]+", token):
+                  raise SystemExit("Invalid PostHog project token format")
+              config = {"token": token, "region": "US"}
+
+          html = Path("index.html").read_text(encoding="utf-8")
+          marker = '<script id="analytics-config" type="application/json">{}</script>'
+          if html.count(marker) != 1:
+              raise SystemExit("Expected exactly one analytics configuration script")
+
+          output = Path("_site")
+          output.mkdir(exist_ok=True)
+          tag = marker.replace("{}", json.dumps(config, separators=(",", ":")))
+          (output / "index.html").write_text(html.replace(marker, tag), encoding="utf-8")
+          PY
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - uses: actions/deploy-pages@v4
+        id: deployment
